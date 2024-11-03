@@ -8,6 +8,11 @@ set(CMAKE_AUTORCC ON)
 
 # Build executable
 qt_add_executable(deimos
+	"${PROJECT_SOURCE_DIR}/src/app/browselineedit.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/assettreewidget.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/assetdialog.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/projectfile.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/projecttab.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/mainwindow.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/main.cpp"
 )
