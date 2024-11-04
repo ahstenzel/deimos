@@ -4,8 +4,26 @@ bool itemIsGroup(QTreeWidgetItem* item) {
 	return (item && item->text(1).isEmpty());
 }
 
+NoEditDelegate::NoEditDelegate(QObject* parent) : 
+	QStyledItemDelegate(parent) {}
+
+QWidget* NoEditDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const {
+	return nullptr;
+}
+
 ProjectTabPage::ProjectTabPage(QWidget* parent, const QString& filename, ProjectTabWidget* tabs) :
 	QWidget(parent), m_projectFile(nullptr), m_dirty(false), m_assetDialog(nullptr), m_assetDialogEditItem(nullptr), TabWidget_Parent(tabs) {
+	m_assetFlags = 
+		Qt::ItemFlag::ItemIsSelectable | 
+		Qt::ItemFlag::ItemIsDragEnabled |
+		Qt::ItemFlag::ItemIsEnabled;
+	m_groupFlags = 
+		Qt::ItemFlag::ItemIsSelectable | 
+		Qt::ItemFlag::ItemIsEditable |
+		Qt::ItemFlag::ItemIsDragEnabled |
+		Qt::ItemFlag::ItemIsDropEnabled |
+		Qt::ItemFlag::ItemIsEnabled;
+	
 	// Top level container widget
 	Layout_Main = new QVBoxLayout();
 	setLayout(Layout_Main);
@@ -82,12 +100,16 @@ ProjectTabPage::ProjectTabPage(QWidget* parent, const QString& filename, Project
 	if (filename.isEmpty()) {
 		StackedWidget_Main->setCurrentIndex(0);
 	} else {
-		openFile(filename);
+		ProjectFileInfo info;
+		info.m_filename = filename;
+		if (!ProjectFile::readFile(&info)) {
+			QMessageBox::warning(this, "Error", "Failed to open project file!");
+		} else { openFile(info); }
 	}
 }
 
 ProjectTabPage::~ProjectTabPage() {
-	closeFile(); 
+	delete m_projectFile;
 	delete m_assetDialog;
 	delete Layout_AssetButtons;
 	delete Layout_ProjectOptions;
@@ -109,30 +131,87 @@ void ProjectTabPage::setDirty(bool dirty) {
 	updateTitle();
 }
 
-void ProjectTabPage::openFile(const QString &filename) {
-	// Verify file
-	if (!QFile::exists(filename)) {
-		QMessageBox::warning(this, "Error", QString("Failed to open (%0)!").arg(filename));
-		return;
+void ProjectTabPage::openFile(const ProjectFileInfo &projectFileInfo) {
+	// Update widgets
+	setProjectFilename(projectFileInfo.m_filename);
+	CheckBox_UseCompression->setChecked(projectFileInfo.m_useCompression);
+	ComboBox_CipherMethod->setCurrentText(projectFileInfo.m_cipherMethod);
+
+	// Add top level items to the list
+	typedef QPair<AssetTreeNode*, QTreeWidgetItem*> AssetItemPair;
+	QList<AssetItemPair> assetList;
+	if (projectFileInfo.m_assetTree) {
+		for(auto child : *projectFileInfo.m_assetTree) {
+			assetList.push_back(AssetItemPair::pair(child, nullptr));
+		}
 	}
 
-	// Close existing project & open new one
-	QFileInfo* newProjectFile = new QFileInfo(filename);
-	if (m_projectFile) { closeFile(); }
-	m_projectFile = newProjectFile;
+	// Iterate through list, adding children to asset tree
+	while(!assetList.isEmpty()) {
+		// Extract asset & item references
+		AssetItemPair pair = assetList.front();
+		assetList.pop_front();
+		AssetTreeNode* assetCurrent = pair.first;
+		QTreeWidgetItem* itemCurrent = pair.second;
 
-	// Update widgets
-	ProjectFileInfo info = ProjectFile::loadFile(filename);
-	CheckBox_UseCompression->setChecked(info.m_useCompression);
-	ComboBox_CipherMethod->setCurrentText(info.m_cipherMethod);
+		// Create new tree item
+		QTreeWidgetItem* itemNew = new QTreeWidgetItem();
+		if (assetCurrent->isGroup()) {
+			itemNew->setFlags(m_groupFlags);
+
+			// Add children to list
+			for(auto child : *assetCurrent) {
+				assetList.push_back(AssetItemPair::pair(child, itemNew));
+			}
+		} else { itemNew->setFlags(m_assetFlags); }
+		assetInfoToItem(assetCurrent->assetInfo(), itemNew);
+
+		// Add to tree
+		if (itemCurrent) { itemCurrent->addChild(itemNew); } 
+		else { TreeWidget_Assets->addTopLevelItem(itemNew); }
+	}
 
 	// Switch to populated page
 	StackedWidget_Main->setCurrentIndex(1);
 	setDirty(false);
 }
 
-void ProjectTabPage::closeFile() {
-	delete m_projectFile;
+void ProjectTabPage::saveFile(ProjectFileInfo* projectFileInfo) {
+	if (!projectFileInfo) { return; }
+
+	// Fill in generic project info
+	projectFileInfo->m_filename = projectFilename();
+	projectFileInfo->m_cipherMethod = ComboBox_CipherMethod->currentText();
+	projectFileInfo->m_useCompression = CheckBox_UseCompression->isChecked();
+	if (projectFileInfo->m_assetTree) { delete projectFileInfo->m_assetTree; }
+	projectFileInfo->m_assetTree = new AssetTreeNode();
+
+	// Add top level widget items to list
+	typedef QPair<AssetTreeNode*, QTreeWidgetItem*> AssetItemPair;
+	QStack<AssetItemPair> assetList;
+	for(int i = 0; i < TreeWidget_Assets->topLevelItemCount(); ++i) {
+		assetList.push(AssetItemPair::pair(projectFileInfo->m_assetTree, TreeWidget_Assets->topLevelItem(i)));
+	}
+
+	// Iterate through list, adding children to file tree
+	while(!assetList.isEmpty()) {
+		// Extract parent/widget item pair
+		AssetItemPair pair = assetList.front();
+		assetList.pop_front();
+		AssetTreeNode* assetCurrent = pair.first;
+		QTreeWidgetItem* itemCurrent = pair.second;
+
+		// Construct asset info & add to asset tree
+		AssetInfo assetCurrentInfo;
+		assetItemToInfo(itemCurrent, &assetCurrentInfo);
+		AssetTreeNode* assetNew = assetCurrent->addChild(assetCurrentInfo);
+
+		// Add items children to the list
+		for(int i = 0; i < itemCurrent->childCount(); ++i) {
+			QTreeWidgetItem* child = itemCurrent->child(i);
+			assetList.push(AssetItemPair::pair(assetNew, child));
+		}
+	}
 }
 
 void ProjectTabPage::updateTitle() {
@@ -149,14 +228,27 @@ void ProjectTabPage::updateTitle() {
 void ProjectTabPage::onClicked_PushButton_CreateProjectFile() {
 	QString filename = QFileDialog::getSaveFileName(this, tr("Save File"), ".", tr("Mars Resource Project (*.mrp)"));
 	if (!filename.isEmpty()) { 
-		ProjectFile::createFile(filename);
-		openFile(filename); 
+		// Create default file
+		if (!ProjectFile::createFile(filename)) { return; }
+
+		// Load newly created file
+		ProjectFileInfo info;
+		info.m_filename = filename;
+		if (!ProjectFile::readFile(&info)) {
+			QMessageBox::warning(this, "Error", "Failed to open project file!");
+		} else { openFile(info); }
 	}
 }
 
 void ProjectTabPage::onClicked_PushButton_OpenProjectFile() {
 	QString filename = QFileDialog::getOpenFileName(this, tr("Open File"), ".", tr("Mars Resource Project (*.mrp)"));
-	if (!filename.isEmpty()) { openFile(filename); }
+	if (!filename.isEmpty()) { 
+		ProjectFileInfo info;
+		info.m_filename = filename;
+		if (!ProjectFile::readFile(&info)) {
+			QMessageBox::warning(this, "Error", "Failed to open project file!");
+		} else { openFile(info); }
+	}
 }
 
 void ProjectTabPage::onCheckStateChanged_CheckBox_UseCompression(int state) {
@@ -169,22 +261,15 @@ void ProjectTabPage::onCurrentIndexChanged_ComboBox_CipherMethod(int index) {
 
 void ProjectTabPage::onFinished_AssetDialog(int status) {
 	if (status == QDialog::Accepted && m_assetDialog) {
-		assetInfo info = m_assetDialog->getValue();
+		AssetInfo info = m_assetDialog->getValue();
 		
 		// Check if we're editing an item or creating a new one
 		QTreeWidgetItem* item = (m_assetDialogEditItem) ? m_assetDialogEditItem : new QTreeWidgetItem();
 		m_assetDialogEditItem = nullptr;
 		
 		// Set item properties
-		item->setFlags(
-			Qt::ItemFlag::ItemIsSelectable | 
-			Qt::ItemFlag::ItemIsDragEnabled |
-			//Qt::ItemFlag::ItemIsDropEnabled |
-			Qt::ItemFlag::ItemIsEnabled
-		);
-		item->setText(0, info.title);
-		item->setText(1, info.type);
-		item->setText(2, info.filename);
+		item->setFlags(m_assetFlags);
+		assetInfoToItem(info, item);
 		addItem(item, false);
 	}
 	delete m_assetDialog;
@@ -234,13 +319,7 @@ void ProjectTabPage::assetTree_AddFile() {
 
 void ProjectTabPage::assetTree_AddDirectory() {
 	QTreeWidgetItem* item = new QTreeWidgetItem();
-	item->setFlags(
-		Qt::ItemFlag::ItemIsSelectable | 
-		Qt::ItemFlag::ItemIsEditable |
-		Qt::ItemFlag::ItemIsDragEnabled |
-		Qt::ItemFlag::ItemIsDropEnabled |
-		Qt::ItemFlag::ItemIsEnabled
-	);
+	item->setFlags(m_groupFlags);
 	item->setText(0, "New Group");
 	addItem(item, true);
 }
@@ -278,10 +357,8 @@ void ProjectTabPage::assetTree_EditItem() {
 
 		// Create asset dialog
 		m_assetDialog = new AssetDialog(this);
-		assetInfo info;
-		info.title = item->text(0);
-		info.type = item->text(1);
-		info.filename = item->text(2);
+		AssetInfo info;
+		assetItemToInfo(item, &info);
 		m_assetDialog->setValue(info);
 		m_assetDialog->open();
 		connect(m_assetDialog, &AssetDialog::finished, this, &ProjectTabPage::onFinished_AssetDialog);
@@ -309,6 +386,29 @@ void ProjectTabPage::addItem(QTreeWidgetItem* item, bool edit) {
 	setDirty(true);
 }
 
+void ProjectTabPage::assetInfoToItem(const AssetInfo& info, QTreeWidgetItem* item) {
+	item->setText(0, info.title);
+	item->setText(1, info.type);
+	item->setText(2, info.filename);
+}
+
+void ProjectTabPage::assetItemToInfo(QTreeWidgetItem* item, AssetInfo* info) {
+	info->title = item->text(0);
+	info->type = item->text(1);
+	info->filename = item->text(2);
+}
+
+QString ProjectTabPage::projectFilename() {
+	return m_projectFile->absoluteFilePath();
+}
+
+void ProjectTabPage::setProjectFilename(const QString &filename) {
+	QFileInfo* newProjectFile = new QFileInfo(filename);
+	if (m_projectFile) { delete m_projectFile; }
+	m_projectFile = newProjectFile;
+	updateTitle();
+}
+
 ProjectTabWidget::ProjectTabWidget(QWidget *parent) :
 	QTabWidget(parent) {
 	// Add close button
@@ -331,7 +431,13 @@ ProjectTabWidget::~ProjectTabWidget() {
 }
 
 int ProjectTabWidget::addTab(const QString& filename) {
-	return QTabWidget::addTab(new ProjectTabPage(nullptr, filename, this), filename.isEmpty() ? "<New Project>" : filename);
+	int idx = QTabWidget::addTab(new ProjectTabPage(nullptr, filename, this), filename.isEmpty() ? "<New Project>" : filename);
+	setCurrentIndex(idx);
+	return idx;
+}
+
+ProjectTabPage* ProjectTabWidget::currentPage() {
+	return static_cast<ProjectTabPage*>(currentWidget());
 }
 
 void ProjectTabWidget::onTabCloseRequested_ProjectTabPage(int index) {

@@ -12,8 +12,8 @@
 // Standard libraries
 #include <iostream>
 #include <memory>
-#include <vector>
 #include <algorithm>
+#include <exception>
 
 // Qt libraries
 #include <QWidget>
@@ -38,15 +38,67 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include <QVariant>
-#include <QVariantList>
-#include <QFileDialog>
-#include <QFile>
-#include <QFileInfo>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QStyledItemDelegate>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QFileDialog>
+#include <QFile>
+#include <QFileInfo>
+#include <QDomDocument>
 #include <QXMLStreamWriter>
 #include <QXMLStreamReader>
-#include <QEvent>
-#include <QMouseEvent>
+#include <QVariant>
+#include <QVariantList>
+#include <QVector>
+#include <QStack>
+#include <QList>
+#include <QException>
+
+struct AssetInfo {
+	QString title = "";
+	QString type = "";
+	QString filename = "";
+};
+
+struct AssetTypeDescriptor {
+	QString code = "";
+	QStringList extensions = {};
+};
+
+extern const QList<QPair<QString, AssetTypeDescriptor>> assetTypes;
+
+extern const QStringList cipherMethods;
+
+class AssetTreeNode {
+public:
+	AssetTreeNode();
+	AssetTreeNode(const AssetInfo& assetInfo);
+	~AssetTreeNode();
+
+	AssetTreeNode* addChild();
+	AssetTreeNode* addChild(const AssetInfo& assetInfo);
+	void removeChild(AssetTreeNode* child);
+	qsizetype childCount();
+	QVector<AssetTreeNode*>::iterator begin();
+	QVector<AssetTreeNode*>::iterator end();
+	QVector<AssetTreeNode*>::reverse_iterator rbegin();
+	QVector<AssetTreeNode*>::reverse_iterator rend();
+
+	bool isGroup();
+
+	AssetInfo assetInfo();
+	void setAssetInfo(const AssetInfo& assetInfo);
+
+private:
+	AssetInfo m_assetInfo;
+	QVector<AssetTreeNode*> m_children;
+};
+
+struct ProjectFileInfo {
+	QString m_filename = "";
+	AssetTreeNode* m_assetTree = nullptr;
+	QString m_cipherMethod = "";
+	bool m_useCompression = false;
+};

@@ -1,20 +1,5 @@
 #include "assetdialog.hpp"
 
-const QList<QPair<QString, assetTypeDescriptor>> assetTypes = {
-	{"Image", {
-		"IMG_",
-		{"png", "bmp", "tiff"}
-	}},
-	{"Text", {
-		"TXT_",
-		{"txt", "json", "ini", "xml", "hlsl"}
-	}},
-	{"Binary", {
-		"BIN_",
-		{"bin", "spv"}
-	}},
-};
-
 AssetDialog::AssetDialog(QWidget *parent) :
 	QDialog(parent) {
 	Layout_Main = new QFormLayout();
@@ -48,8 +33,8 @@ AssetDialog::~AssetDialog() {
 	delete Layout_Main;
 }
 
-assetInfo AssetDialog::getAssetInfo() {
-	assetInfo info;
+AssetInfo AssetDialog::getAssetInfo() {
+	AssetInfo info;
 	AssetDialog dialog;
 	if (dialog.exec() == QDialog::DialogCode::Accepted) {
 		info = dialog.getValue();
@@ -57,15 +42,15 @@ assetInfo AssetDialog::getAssetInfo() {
 	return info;
 }
 
-assetInfo AssetDialog::getValue() {
-	assetInfo info;
+AssetInfo AssetDialog::getValue() {
+	AssetInfo info;
 	info.title = LineEdit_Title->text();
 	info.type = Label_Type->text();
 	info.filename = LineEdit_Filename->text();
 	return info;
 }
 
-void AssetDialog::setValue(const assetInfo &info) {
+void AssetDialog::setValue(const AssetInfo &info) {
 	LineEdit_Title->setText(info.title);
 	Label_Type->setText(info.type);
 	LineEdit_Filename->setText(info.filename);

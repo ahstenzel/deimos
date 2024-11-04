@@ -9,15 +9,15 @@
 #include "assetdialog.hpp"
 #include "assettreewidget.hpp"
 
+bool itemIsGroup(QTreeWidgetItem* item);
+
 class NoEditDelegate: public QStyledItemDelegate {
 public:
-	NoEditDelegate(QObject* parent = nullptr): QStyledItemDelegate(parent) {}
-	virtual QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const {
-		return nullptr;
-	}
+	NoEditDelegate(QObject* parent = nullptr);
+	virtual QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const;
 };
 
-bool itemIsGroup(QTreeWidgetItem* item);
+class ProjectTabPage;
 
 class ProjectTabWidget : public QTabWidget {
 	Q_OBJECT
@@ -25,6 +25,7 @@ public:
 	explicit ProjectTabWidget(QWidget* parent = nullptr);
 	~ProjectTabWidget();
 	int addTab(const QString& filename = "");
+	ProjectTabPage* currentPage();
 
 private:
 	QToolButton* toolButton_NewTab;
@@ -44,8 +45,11 @@ public:
 	bool getDirty();
 	void setDirty(bool dirty);
 
-	void openFile(const QString& filename);
-	void closeFile();
+	QString projectFilename();
+	void setProjectFilename(const QString& filename);
+
+	void openFile(const ProjectFileInfo& projectFileInfo);
+	void saveFile(ProjectFileInfo* projectFileInfo);
 
 private:
 	ProjectTabWidget* TabWidget_Parent;
@@ -71,8 +75,14 @@ private:
 	QTreeWidgetItem* m_assetDialogEditItem;
 	bool m_dirty;
 
+	Qt::ItemFlags m_assetFlags;
+	Qt::ItemFlags m_groupFlags;
+
 	void updateTitle();
 	void addItem(QTreeWidgetItem* item, bool edit);
+
+	void assetInfoToItem(const AssetInfo& info, QTreeWidgetItem* item);
+	void assetItemToInfo(QTreeWidgetItem* item, AssetInfo* info);
 
 public slots:
 	void onClicked_PushButton_CreateProjectFile();

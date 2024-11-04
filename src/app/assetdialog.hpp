@@ -7,28 +7,15 @@
 #include "common.hpp"
 #include "browselineedit.hpp"
 
-struct assetInfo {
-	QString title = "";
-	QString type = "";
-	QString filename = "";
-};
-
-struct assetTypeDescriptor {
-	QString code = "";
-	QStringList extensions = {};
-};
-
-extern const QList<QPair<QString, assetTypeDescriptor>> assetTypes;
-
 class AssetDialog : public QDialog {
 	Q_OBJECT;
 public:
 	AssetDialog(QWidget* parent = nullptr);
 	~AssetDialog();
 
-	static assetInfo getAssetInfo();
-	assetInfo getValue();
-	void setValue(const assetInfo& info);
+	static AssetInfo getAssetInfo();
+	AssetInfo getValue();
+	void setValue(const AssetInfo& info);
 
 private:
 	QFormLayout* Layout_Main;

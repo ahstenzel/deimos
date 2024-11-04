@@ -16,6 +16,10 @@ public:
 	~MainWindow();
 
 public slots:
+	void onMenu_File_NewProject();
+	void onMenu_File_OpenProject();
+	void onMenu_File_SaveProject();
+	void onMenu_File_SaveAsProject();
 	void onMenu_Help_About();
 
 private:

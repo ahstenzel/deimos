@@ -6,27 +6,14 @@
  */
 #include "common.hpp"
 
-extern const QStringList cipherMethods;
-
-class AssetTreeNode {
-public:
-	AssetTreeNode();
-	~AssetTreeNode();
-private:
-	std::vector<AssetTreeNode*> children;
-};
-
-struct ProjectFileInfo {
-	AssetTreeNode* m_assets;
-	QString m_cipherMethod;
-	bool m_useCompression;
-};
-
 class ProjectFile {
 public:
 	static bool createFile(const QString& filename);
 
-	static ProjectFileInfo loadFile(const QString& filename);
+	static bool readFile(ProjectFileInfo* info);
 
-	static void saveFile(const QString& filename, const ProjectFileInfo& assets);
+	static bool writeFile(const ProjectFileInfo& info);
+
+private:
+	static QDomElement addElement(QDomDocument& doc, QDomNode& node, const QString& tag, const QString& value = "");
 };
