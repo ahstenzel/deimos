@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE RCC>
+<RCC version="1.0">
+	<qresource prefix="images">
+		<file alias="mars.ico">images\mars.ico</file>
+	</qresource>
+</RCC>

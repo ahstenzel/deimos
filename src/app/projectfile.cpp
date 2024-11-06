@@ -63,19 +63,11 @@ bool ProjectFile::readFile(ProjectFileInfo* info) {
 					info->m_useCompression = (elemTop.text() == "true");
 				} else if (elemTop.tagName() == "cipher") {
 					info->m_cipherMethod = elemTop.text();
-				} else if (elemTop.tagName() == "assets") {
-					// Read asset tree
+				} else if (elemTop.tagName() == "asset") {
+					// Iterate through file tree
 					typedef QPair<AssetTreeNode*, QDomElement> AssetElementPair;
 					QList<AssetElementPair> assetElementList;
-					info->m_assetTree = new AssetTreeNode();
-
-					// Add top level elements
-					QDomElement elemTopAssets = elemTop.firstChildElement();
-					for(; !elemTopAssets.isNull(); elemTopAssets = elemTopAssets.nextSiblingElement()) {
-						assetElementList.push_back(AssetElementPair::pair(info->m_assetTree, elemTopAssets));
-					}
-
-					// Iterate through children
+					assetElementList.push_back(AssetElementPair::pair(nullptr, elemTop));
 					while(!assetElementList.isEmpty()) {
 						// Extract asset & element nodes
 						AssetElementPair pair = assetElementList.front();
@@ -83,37 +75,28 @@ bool ProjectFile::readFile(ProjectFileInfo* info) {
 						AssetTreeNode* assetCurrent = pair.first;
 						QDomElement elemCurrent = pair.second;
 
-						// Add to asset tree
-						if (elemCurrent.tagName() == "asset") {
-							// Asset
-							QDomElement elemAssetTitle = elemCurrent.firstChildElement("title");
-							QDomElement elemAssetType = elemCurrent.firstChildElement("type");
-							QDomElement elemAssetFilename = elemCurrent.firstChildElement("filename");
-							if (elemAssetFilename.isNull() || elemAssetType.isNull() || elemAssetFilename.isNull()) {
-								throw std::exception("Malformed asset tags");
-							}
-							AssetInfo assetInfo;
-							assetInfo.title = elemAssetTitle.text();
-							assetInfo.type = elemAssetType.text();
-							assetInfo.filename = elemAssetFilename.text();
-							assetCurrent->addChild(assetInfo);
-						}
-						if (elemCurrent.tagName() == "group") {
+						// Populate asset info
+						AssetTreeNode* assetNew = new AssetTreeNode();
+						AssetInfo assetInfo;
+						assetInfo.title = elemCurrent.attribute("title");
+						if (elemCurrent.attribute("group", "false") == "true") {
 							// Group
-							QDomElement elemGroupTitle = elemCurrent.firstChildElement("title");
-							QDomElement elemGroupContents = elemCurrent.firstChildElement("contents");
-							if (elemGroupTitle.isNull() || elemGroupContents.isNull()) {
-								throw std::exception("Malformed group tags");
-							}
-							AssetInfo assetInfo;
-							assetInfo.title = elemGroupTitle.text();
-							AssetTreeNode* assetNew = assetCurrent->addChild(assetInfo);
-
-							// Add children elements
-							QDomElement elemChild = elemGroupContents.firstChildElement();
+							QDomElement elemChild = elemCurrent.firstChildElement();
 							for(; !elemChild.isNull(); elemChild = elemChild.nextSiblingElement()) {
 								assetElementList.push_back(AssetElementPair::pair(assetNew, elemChild));
 							}
+						} else {
+							// Asset
+							assetInfo.type = elemCurrent.attribute("type");
+							assetInfo.filename = elemCurrent.text();
+						}
+						assetNew->setAssetInfo(assetInfo);
+
+						// Add to asset tree
+						if (!assetCurrent) {
+							info->m_assetTree = assetNew;
+						} else {
+							assetCurrent->addChild(assetNew);
 						}
 					}
 				} else {
@@ -142,44 +125,34 @@ bool ProjectFile::writeFile(const ProjectFileInfo& info) {
 	elemTop.setAttribute("version", DEIMOS_VERSION_STR);
 	addElement(doc, elemTop, "compression", info.m_useCompression ? "true" : "false");
 	addElement(doc, elemTop, "cipher", info.m_cipherMethod);
-	QDomElement elemTopAssets = addElement(doc, elemTop, "assets");
 
-	// Write top level assets
-	if (info.m_assetTree) {
-		AssetTreeNode* assetRoot = info.m_assetTree;
-		typedef QPair<AssetTreeNode*, QDomElement> AssetElementPair;
-		QList<AssetElementPair> assetElementList;
-		for(auto child : *assetRoot) {
-			assetElementList.push_back(AssetElementPair::pair(child, elemTopAssets));
-		}
+	// Iterate through asset tree
+	AssetTreeNode* assetRoot = info.m_assetTree;
+	typedef QPair<AssetTreeNode*, QDomElement> AssetElementPair;
+	QList<AssetElementPair> assetElementList;
+	assetElementList.push_back(AssetElementPair::pair(assetRoot, elemTop));
+	while(!assetElementList.isEmpty()) {
+		// Extract asset & element nodes
+		AssetElementPair pair = assetElementList.front();
+		assetElementList.pop_front();
+		AssetTreeNode* assetCurrent = pair.first;
+		QDomElement elemCurrent = pair.second;
+		AssetInfo assetInfo = assetCurrent->assetInfo();
 
-		// Iterate through asset tree, writing children
-		while(!assetElementList.isEmpty()) {
-			// Extract asset & element nodes
-			AssetElementPair pair = assetElementList.front();
-			assetElementList.pop_front();
-			AssetTreeNode* assetCurrent = pair.first;
-			QDomElement elemCurrent = pair.second;
-			AssetInfo assetInfo = assetCurrent->assetInfo();
-
-			// Add to document
-			if (assetCurrent->isGroup()) {
-				// Group
-				QDomElement elemGroup = addElement(doc, elemCurrent, "group");
-				addElement(doc, elemGroup, "title", assetInfo.title);
-				QDomElement elemGroupContents = addElement(doc, elemGroup, "contents");
-
-				// Add children
-				for(auto child : *assetCurrent) {
-					assetElementList.push_back(AssetElementPair::pair(child, elemGroupContents));
-				}
-			} else {
-				// Asset
-				QDomElement elemAsset = addElement(doc, elemCurrent, "asset");
-				addElement(doc, elemAsset, "title", assetInfo.title);
-				addElement(doc, elemAsset, "type", assetInfo.type);
-				addElement(doc, elemAsset, "filename", assetInfo.filename);
+		// Add to file tree
+		QDomElement elemChild = addElement(doc, elemCurrent, "asset");
+		elemChild.setAttribute("title", assetInfo.title);
+		if (assetCurrent->isGroup()) {
+			// Group
+			elemChild.setAttribute("group", "true");
+			for(auto child : *assetCurrent) {
+				assetElementList.push_back(AssetElementPair::pair(child, elemChild));
 			}
+		} else {
+			// Asset
+			elemChild.setAttribute("type", assetInfo.type);
+			QDomText elemChildTxt = doc.createTextNode(assetInfo.filename);
+			elemChild.appendChild(elemChildTxt);
 		}
 	}
 
@@ -187,63 +160,3 @@ bool ProjectFile::writeFile(const ProjectFileInfo& info) {
 	file.close();
 	return true;
 }
-
-/*
-bool ProjectFile::saveFile(const QString &filename, const ProjectFileInfo &info) {
-	// Create new file
-	QFile file(filename);
-	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) { return false; }
-
-	// Open XML streamer
-	QXmlStreamWriter xml(&file);
-	xml.setAutoFormatting(true);
-	xml.writeStartDocument();
-	xml.writeDTD("<!DOCTYPE mrp>");
-
-	// Write blank file info
-	xml.writeStartElement("mrp");
-	xml.writeAttribute("version", DEIMOS_VERSION_STR);
-	xml.writeTextElement("compression", (info.m_useCompression) ? "true" : "false");
-	xml.writeTextElement("cipher", info.m_cipherMethod);
-
-	// Write assets
-	xml.writeStartElement("assets");
-	if (info.m_assetTree) {
-		for(auto child = info.m_assetTree->begin(); child != info.m_assetTree->end(); ++child) {
-			traverseAssetTree(&xml, *child);
-		}
-	}
-	xml.writeEndElement(); // assets
-	xml.writeEndElement(); // mrp
-
-	// Close file
-	xml.writeEndDocument();
-	file.close();
-	return true;
-}
-
-void ProjectFile::traverseAssetTree(QXmlStreamWriter *xml, AssetTreeNode *node) {
-	if (!node || !xml) { return; }
-
-	AssetInfo info = node->assetInfo();
-	xml->writeStartElement(info.title);
-	if (node->childCount() > 0) {
-		// Group
-		xml->writeAttribute("group", "true");
-		for(auto child = node->begin(); child != node->end(); ++child) {
-			traverseAssetTree(xml, *child);
-		}
-
-		// End of group
-		xml->writeEndElement();
-		xml->writeStartElement("NULL");
-		xml->writeAttribute("end", "true");
-	} else {
-		// Asset
-		xml->writeAttribute("group", "false");
-		xml->writeTextElement("type", info.type);
-		xml->writeTextElement("filename", info.filename);
-	}
-	xml->writeEndElement(); // info.title
-}
-*/

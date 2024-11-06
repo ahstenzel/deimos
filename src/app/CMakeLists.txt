@@ -13,10 +13,16 @@ qt_add_executable(deimos
 	"${PROJECT_SOURCE_DIR}/src/app/assetdialog.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/projectfile.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/projecttab.cpp"
-	"${PROJECT_SOURCE_DIR}/src/app/common.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/mainwindow.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/resources.cpp"
+	"${PROJECT_SOURCE_DIR}/src/app/common.cpp"
 	"${PROJECT_SOURCE_DIR}/src/app/main.cpp"
+	"${PROJECT_SOURCE_DIR}/resources/mars.rc"
 )
+
+# Build resources
+include(resourcecompile)
+rcc(deimos "${PROJECT_SOURCE_DIR}/resources/resources.qrc" "${PROJECT_SOURCE_DIR}/src/app/resources.cpp")
 
 # Include Qt headers
 target_include_directories(deimos PRIVATE 
@@ -28,7 +34,6 @@ target_include_directories(deimos PRIVATE
 
 # Copy dependencies to output folder
 if (${DEIMOS_OS} STREQUAL "windows")
-	set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake")
 	include(windeployqt)
 	windeployqt(deimos)
 endif()

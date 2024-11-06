@@ -79,6 +79,7 @@ public:
 
 	AssetTreeNode* addChild();
 	AssetTreeNode* addChild(const AssetInfo& assetInfo);
+	AssetTreeNode* addChild(AssetTreeNode* node);
 	void removeChild(AssetTreeNode* child);
 	qsizetype childCount();
 	QVector<AssetTreeNode*>::iterator begin();

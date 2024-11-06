@@ -37,9 +37,14 @@ AssetTreeNode* AssetTreeNode::addChild() {
 
 AssetTreeNode* AssetTreeNode::addChild(const AssetInfo& assetInfo) {
 	AssetTreeNode* child = new AssetTreeNode(assetInfo);
-	m_children.push_back(child);
-	return child;
+	return addChild(child);
 }
+
+AssetTreeNode* AssetTreeNode::addChild(AssetTreeNode* node) {
+	m_children.push_back(node);
+	return node;
+}
+
 
 void AssetTreeNode::removeChild(AssetTreeNode *child) {
 	for(qsizetype i = 0; i < m_children.size(); ++i) {

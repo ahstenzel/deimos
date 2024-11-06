@@ -1,10 +1,10 @@
 #include "mainwindow.hpp"
 
 MainWindow::MainWindow(QWidget *parent) :
-	QMainWindow(parent)
-{
+	QMainWindow(parent) {
 	// Set window properties
 	setWindowTitle("Deimos");
+	setWindowIcon(QIcon(":/images/mars.ico"));
 
 	// Main container
 	Widget_Main = new QWidget();
