@@ -14,6 +14,7 @@
 #include <memory>
 #include <algorithm>
 #include <exception>
+#include <limits>
 
 // Qt libraries
 #include <QWidget>

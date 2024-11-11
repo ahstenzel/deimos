@@ -122,7 +122,7 @@ bool ProjectTabPage::isEmpty() {
 	return (m_projectFile == nullptr);
 }
 
-bool ProjectTabPage::getDirty() {
+bool ProjectTabPage::isDirty() {
 	return m_dirty;
 }
 

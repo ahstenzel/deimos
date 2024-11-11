@@ -18,18 +18,23 @@ MainWindow::MainWindow(QWidget *parent) :
 	QAction* Action_File_OpenProject = new QAction("&Open Project");
 	QAction* Action_File_SaveProject = new QAction("&Save Project");
 	QAction* Action_File_SaveAsProject = new QAction("Save Project As");
+	QAction* Action_File_ExportProject = new QAction("&Export Resource File");
 	Action_File_NewProject->setShortcut(Qt::Key_N | Qt::CTRL);
 	Action_File_OpenProject->setShortcut(Qt::Key_O | Qt::CTRL);
 	Action_File_SaveProject->setShortcut(Qt::Key_S | Qt::CTRL);
 	Action_File_SaveAsProject->setShortcut(Qt::Key_S | Qt::SHIFT | Qt::CTRL);
+	Action_File_ExportProject->setShortcut(Qt::Key_E | Qt::CTRL);
 	connect(Action_File_NewProject, &QAction::triggered, this, &MainWindow::onMenu_File_NewProject);
 	connect(Action_File_OpenProject, &QAction::triggered, this, &MainWindow::onMenu_File_OpenProject);
 	connect(Action_File_SaveProject, &QAction::triggered, this, &MainWindow::onMenu_File_SaveProject);
 	connect(Action_File_SaveAsProject, &QAction::triggered, this, &MainWindow::onMenu_File_SaveAsProject);
+	connect(Action_File_ExportProject, &QAction::triggered, this, &MainWindow::onMenu_File_ExportProject);
 	Menu_File->addAction(Action_File_NewProject);
 	Menu_File->addAction(Action_File_OpenProject);
 	Menu_File->addAction(Action_File_SaveProject);
 	Menu_File->addAction(Action_File_SaveAsProject);
+	Menu_File->addSeparator();
+	Menu_File->addAction(Action_File_ExportProject);
 	Menu_Help = menuBar()->addMenu("&Help");
 	QAction* Action_Help_About = new QAction("About");
 	connect(Action_Help_About, &QAction::triggered, this, &MainWindow::onMenu_Help_About);
@@ -79,6 +84,18 @@ void MainWindow::onMenu_File_SaveAsProject() {
 	if (!newFilename.isEmpty()) {
 		page->setProjectFilename(newFilename);
 		onMenu_File_SaveProject();
+	}
+}
+
+void MainWindow::onMenu_File_ExportProject() {
+	ProjectTabPage* page = TabWidget_Main->currentPage();
+	QString exportFilename = QFileDialog::getSaveFileName(this, tr("Export File"), ".", tr("Mars Resource Container (*.mrc)"));
+	if (!exportFilename.isEmpty()) {
+		ProjectFileInfo info;
+		page->saveFile(&info);
+		if (!ProjectFile::exportFile(info, exportFilename)) {
+			QMessageBox::warning(this, "Error", "Failed to export resource file!");
+		}
 	}
 }
 

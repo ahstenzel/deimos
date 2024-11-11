@@ -42,7 +42,7 @@ public:
 	~ProjectTabPage();
 	bool isEmpty();
 
-	bool getDirty();
+	bool isDirty();
 	void setDirty(bool dirty);
 
 	QString projectFilename();

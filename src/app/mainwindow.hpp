@@ -20,6 +20,7 @@ public slots:
 	void onMenu_File_OpenProject();
 	void onMenu_File_SaveProject();
 	void onMenu_File_SaveAsProject();
+	void onMenu_File_ExportProject();
 	void onMenu_Help_About();
 
 private:
