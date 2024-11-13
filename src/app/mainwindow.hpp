@@ -7,10 +7,8 @@
 #include "common.hpp"
 #include "projecttab.hpp"
 
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
 	Q_OBJECT
-
 public:
 	explicit MainWindow(QWidget *parent = nullptr);
 	~MainWindow();

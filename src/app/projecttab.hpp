@@ -9,8 +9,10 @@
 #include "assetdialog.hpp"
 #include "assettreewidget.hpp"
 
+/// @brief Check if the Qt tree element represents a group.
 bool itemIsGroup(QTreeWidgetItem* item);
 
+/// @brief Dummy class to prevent editing certain Qt tree items.
 class NoEditDelegate: public QStyledItemDelegate {
 public:
 	NoEditDelegate(QObject* parent = nullptr);

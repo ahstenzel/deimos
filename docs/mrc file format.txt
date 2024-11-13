@@ -1,11 +1,11 @@
-[Header]                (24 bytes)
+[Header]                (32 bytes)
     Signature               (4 bytes)
     Version                 (4 bytes)
     File Table Offset       (8 bytes)
     First Data Chunk Offset (8 bytes)
+    Reserved                (8 bytes)
 
-
-[File Table]            (x bytes)
+[File Table]            (x bytes) (Note: 16-byte aligned)
     [Header]                (12 bytes)
         Signature               (4 bytes)
         Asset Count             (4 bytes)
@@ -17,8 +17,9 @@
         Name                    (32 bytes)
         Data Chunk Offset       (8 bytes)
     ...
+...
 
-[Data Chunk]            (x bytes)
+[Data Chunk]            (x bytes) (Note: 16-byte aligned)
     [Header]                (72 bytes)
         Type					(4 bytes)
         CRC32					(4 bytes)

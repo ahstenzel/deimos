@@ -246,7 +246,7 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 	try {
 		// ========================================== Write header
 		// Signature
-		byte.push_back("MARS");
+		byteArrayPushStr(&byte, "MARS", 4);
 
 		// Version
 		byteArrayPushInt8(&byte, DEIMOS_VERSION_MAJOR);
@@ -255,8 +255,10 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 		byteArrayPushInt8(&byte, 0);
 
 		// Offsets
-		uint64_t rootFileTableOffset = 24;
+		uint64_t rootFileTableOffset = 32;
 		byteArrayPushInt64(&byte, rootFileTableOffset);
+		byteArrayPushInt64(&byte, 0);
+		byteArrayPushInt64(&byte, 0);
 
 		// ========================================== File table
 		QVector<FileTable> fileTables;
@@ -296,16 +298,15 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 			fileTableAccum += fileTables[i].byteSize();
 		}
 
-		// Calculate start of data blocks
-		uint64_t firstDataBlockOffset = fileTableAccum;
-		byteArrayPushInt64(&byte, firstDataBlockOffset);
+		// Record start of data blocks
+		byteArraySetInt64(&byte, 24, fileTableAccum);
 
 		// Update offsets for children file tables
 		for(qsizetype i = 0; i < fileTables.size(); ++i) {
 			for(auto it = fileTables[i].begin(); it != fileTables[i].end(); ++it) {
-				if (it.isGroup()) {
-					uint64_t offset = fileTableOffsets[*it];
-					*it = offset;
+				if (it->group) {
+					uint64_t offset = fileTableOffsets[it->data];
+					it->data = offset;
 				}
 			}
 		}
@@ -314,16 +315,26 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 		QByteArray byteDataBlocks;
 
 		// Iterate through all assets in all file tables
-		uint64_t dataBlockAccum = firstDataBlockOffset;
+		uint64_t dataBlockAccum = fileTableAccum;
 		for (qsizetype i = 0; i < fileTables.size(); ++i) {
 			for (auto it = fileTables[i].begin(); it != fileTables[i].end(); ++it) {
-				if (!it.isGroup()) {
+				if (!it->group) {
 					// Convert asset to binary
-					DataBlock block = dataBlocks[*it];
-					QByteArray byteBlock = block.toBytes();
+					DataBlock block = dataBlocks[it->data];
+					QByteArray byteBlock = block.toBytes(info.m_useCompression, info.m_cipherMethod);
+					if (byteBlock.isEmpty()) {
+						AssetTreeNode* assetNode = block.asset();
+						if (!assetNode) {
+							throw std::exception("NULL data block");
+						} else {
+							AssetInfo assetInfo = assetNode->assetInfo();
+							std::string message = std::string("Failed to encode data block for asset ") + assetInfo.title.toStdString();
+							throw std::exception(message.data());
+						}
+					}
 
 					// Update offset of block in file table
-					*it = dataBlockAccum;
+					it->data = dataBlockAccum;
 					dataBlockAccum += byteBlock.size();
 					byteDataBlocks.push_back(byteBlock);
 				}
@@ -361,7 +372,6 @@ FileTable::FileTable(size_t capacity) {
 FileTable::FileTable(FileTable&& other) noexcept {
 	m_capacity = std::move(other.m_capacity);
 	m_length = std::move(other.m_length);
-	m_loadCount = std::move(other.m_loadCount);
 	m_dirty = std::move(other.m_dirty);
 	m_byteArray = std::move(other.m_byteArray);
 	m_ctrl = new uint8_t[m_capacity];
@@ -375,7 +385,6 @@ FileTable::FileTable(FileTable&& other) noexcept {
 FileTable::FileTable(const FileTable& other) {
 	m_capacity = other.m_capacity;
 	m_length = other.m_length;
-	m_loadCount = other.m_loadCount;
 	m_dirty = other.m_dirty;
 	m_byteArray = other.m_byteArray;
 	m_ctrl = new uint8_t[m_capacity];
@@ -398,7 +407,7 @@ void FileTable::insert(char* name, size_t len, FileElementType data, bool group)
 	// Resize if needed
 	if (m_capacity == 0) {
 		resize(defaultCapacity);
-	} else if (m_loadCount / (float)m_capacity >= 0.875f) {
+	} else if (m_length / (float)m_capacity >= 0.875f) {
 		resize(m_capacity * 2);
 	}
 
@@ -425,7 +434,6 @@ void FileTable::insert(char* name, size_t len, FileElementType data, bool group)
 		}
 	}
 	m_length++;
-	m_loadCount++;
 	m_dirty = true;
 }
 
@@ -434,7 +442,7 @@ size_t FileTable::size() const {
 }
 
 size_t FileTable::byteSize() const {
-	return 12 + (41 * m_capacity);
+	return roundUp(12 + (41 * m_capacity), 16);
 }
 
 bool FileTable::isEmpty() const {
@@ -462,6 +470,9 @@ QByteArray FileTable::toBytes() {
 			byteArrayPushStr(&m_byteArray, node.name, 32);
 			byteArrayPushInt64(&m_byteArray, node.data);
 		}
+
+		// Padding
+		while(m_byteArray.size() % 16 != 0) { byteArrayPushInt8(&m_byteArray, 0xFF); }
 	}
 	return m_byteArray;
 }
@@ -469,7 +480,6 @@ QByteArray FileTable::toBytes() {
 void swap(FileTable& lhs, FileTable& rhs) {
 	std::swap(lhs.m_capacity, rhs.m_capacity);
 	std::swap(lhs.m_length, rhs.m_length);
-	std::swap(lhs.m_loadCount, rhs.m_loadCount);
 	std::swap(lhs.m_dirty, rhs.m_dirty);
 	std::swap(lhs.m_byteArray, rhs.m_byteArray);
 	std::swap(lhs.m_ctrl, rhs.m_ctrl);
@@ -503,7 +513,6 @@ void FileTable::resize(size_t newCapacity) {
 	m_ctrl = newCtrl;
 	m_nodes = newNodes;
 	m_capacity = newCapacity;
-	m_loadCount = 0;
 	m_length = 0;
 
 	// Move over old contents
@@ -543,10 +552,6 @@ inline bool FileTable::ctrlIsEmpty(uint8_t h) {
 	return h & 0x80;
 }
 
-inline bool FileTable::ctrlIsDeleted(uint8_t h) {
-	return h & 0xFE;
-}
-
 FileTable::iterator FileTable::begin() {
 	iterator it(this, std::numeric_limits<size_t>::max());
 	return ++it;
@@ -577,16 +582,12 @@ FileTable::iterator FileTable::iterator::operator++(int) {
 	return tmp;
 }
 
-FileTable::FileElementType& FileTable::iterator::operator*() {
-	return m_table->m_nodes[m_idx].data;
+FileTable::iterator::reference FileTable::iterator::operator*() {
+	return m_table->m_nodes[m_idx];
 }
 
-FileTable::FileElementType *FileTable::iterator::operator->() {
-	return &m_table->m_nodes[m_idx].data;
-}
-
-bool FileTable::iterator::isGroup() const {
-	return m_table->m_nodes[m_idx].group;
+FileTable::iterator::pointer FileTable::iterator::operator->() {
+	return &m_table->m_nodes[m_idx];
 }
 
 DataBlock::DataBlock(AssetTreeNode *asset) :
@@ -601,13 +602,12 @@ void DataBlock::setAsset(AssetTreeNode* asset) {
 	m_dirty = true;
 }
 
-QByteArray DataBlock::toBytes() {
+QByteArray DataBlock::toBytes(bool useCompression, QString cipherMethod) {
 	if (m_dirty && m_asset) {
 		m_dirty = false;
 		m_byteArray.clear();
 		AssetInfo info = m_asset->assetInfo();
 
-		// ========================================== Write header
 		// Type code
 		QString typeCode = "";
 		for(auto type : assetTypes) {
@@ -625,34 +625,58 @@ QByteArray DataBlock::toBytes() {
 
 		// Get file contents
 		QFile assetFile(info.filename);
-		if (!assetFile.open(QIODevice::ReadOnly)) {
+		QIODeviceBase::OpenMode flags = QIODevice::ReadOnly;
+		if (typeCode == "MTXT") {
+			flags |= QIODevice::Text;
+		}
+		if (!assetFile.open(flags)) {
 			m_byteArray.clear();
 			return m_byteArray;
 		}
-		QByteArray fileBytes = assetFile.read(assetFile.size());
+		QByteArray byteFile = assetFile.read(assetFile.size());
 		assetFile.close();
+		uint64_t uncompressedSize = byteFile.size();
+		uint64_t compressedSize = uncompressedSize;
+		uint32_t crc = crc32Calculate(byteFile.data(), byteFile.size());
+
+		// Parse data
+		if (typeCode == "MIMG") {
+			// Decode image data into bitmap
+		}
+
+		// Compress data
+		if (useCompression) {
+			int maxCompressedSize = LZ4_compressBound(byteFile.size());
+			char* bufferCompressed = new char[maxCompressedSize];
+			compressedSize = LZ4_compress_default(byteFile.data(), bufferCompressed, byteFile.size(), maxCompressedSize);
+			if (compressedSize == 0) {
+				delete[] bufferCompressed;
+				m_byteArray.clear();
+				return m_byteArray;
+			}
+			byteFile.clear();
+			byteFile.push_back(bufferCompressed);
+			delete[] bufferCompressed;
+		}
+
+		// Encrypt data
+		if (cipherMethod != "none") {
+			// Encypt raw data
+		}
 		
 		// Metadata
-		byteArrayPushInt32(&m_byteArray, 0);	// CRC
+		byteArrayPushInt32(&m_byteArray, crc);
 		byteArrayPushInt64(&m_byteArray, 0);	// Next chunk
 		byteArrayPushInt64(&m_byteArray, 0);	// Previous chunk
-		byteArrayPushInt64(&m_byteArray, fileBytes.size());	// Packed size
-		byteArrayPushInt64(&m_byteArray, fileBytes.size());	// Unpacked size
+		byteArrayPushInt64(&m_byteArray, compressedSize);
+		byteArrayPushInt64(&m_byteArray, uncompressedSize);
 		byteArrayPushStr(&m_byteArray, info.title, 32);
 
-		// ========================================== Write contents
-		m_byteArray.push_back(fileBytes);
+		// Contents
+		m_byteArray.push_back(byteFile);
+
+		// Padding
+		while(m_byteArray.size() % 16 != 0) { byteArrayPushInt8(&m_byteArray, 0xFF); }
 	}
 	return m_byteArray;
-}
-
-qsizetype DataBlock::byteSize() {
-	if (!m_asset) { return 0; }
-	qsizetype size = 72;
-
-	// Get file size
-	AssetInfo info = m_asset->assetInfo();
-	QFile assetFile(info.filename);
-	size += assetFile.size();
-	return size;
 }

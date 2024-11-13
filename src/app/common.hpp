@@ -57,21 +57,46 @@
 #include <QList>
 #include <QException>
 
+// External libraries
+#define LZ4_HEAPMODE 1
+#include "lz4.h"
+
+// ============================================== Helper functions
+
+/// @brief Round the number up to the next multiple.
+uint64_t roundUp(uint64_t num, uint64_t multiple);
+
+/// @brief Calcualte the CRC32 value for the given data.
+/// @param data Data buffer
+/// @param length Buffer length
+/// @param previousCRC Previous CRC value (only if data is being appended to an existing CRC value)
+/// @return CRC value
+uint32_t crc32Calculate(const void* data, size_t length, uint32_t previousCRC = 0);
+
+extern const uint32_t crc32Lookup[256];
+
+// ============================================== Asset functions
+
+/// @brief Descriptor for a single asset- whether its an actual resource or a group of resources.
 struct AssetInfo {
 	QString title = "";
 	QString type = "";
 	QString filename = "";
 };
 
+/// @brief Descriptor for a type of asset and the file extensions associated with it.
 struct AssetTypeDescriptor {
 	QString code = "";
 	QStringList extensions = {};
 };
 
+/// @brief Map of asset type names to their associated descriptor.
 extern const QList<QPair<QString, AssetTypeDescriptor>> assetTypes;
 
+/// @brief List of valid encryption algorithms.
 extern const QStringList cipherMethods;
 
+/// @brief Single node in a tree of assets.
 class AssetTreeNode {
 public:
 	AssetTreeNode();
@@ -98,6 +123,7 @@ private:
 	QVector<AssetTreeNode*> m_children;
 };
 
+/// @brief Descriptor for an entire project, with all the assets and settings associated with it.
 struct ProjectFileInfo {
 	QString m_filename = "";
 	AssetTreeNode* m_assetTree = nullptr;
