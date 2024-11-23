@@ -1,9 +1,10 @@
-[Header]                (32 bytes)
+[Header]                (64 bytes)
     Signature               (4 bytes)
     Version                 (4 bytes)
+    Reserved                (8 bytes)
+    AES IV                  (32 bytes)
     File Table Offset       (8 bytes)
     First Data Chunk Offset (8 bytes)
-    Reserved                (8 bytes)
 
 [File Table]            (x bytes) (Note: 16-byte aligned)
     [Header]                (12 bytes)
@@ -20,7 +21,7 @@
 ...
 
 [Data Chunk]            (x bytes) (Note: 16-byte aligned)
-    [Header]                (72 bytes)
+    [Header]                (80 bytes)
         Type					(4 bytes)
         CRC32					(4 bytes)
         Next Chunk				(8 bytes)
@@ -28,6 +29,7 @@
         Packed Size				(8 bytes)
         Unpacked Size			(8 bytes)
         Name					(32 bytes)
+        Reserved                (8 bytes)
     [Data] 					(x bytes)
         Property Count			(4 bytes)
         Properties				(4*i bytes)

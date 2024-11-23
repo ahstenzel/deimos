@@ -67,6 +67,7 @@ private:
 	QPushButton* PushButton_OpenProjectFile;
 	QCheckBox* CheckBox_UseCompression;
 	QComboBox* ComboBox_CipherMethod;
+	QLineEdit* LineEdit_CipherPassword;
 	AssetTreeWidget* TreeWidget_Assets;
 	QGroupBox* GroupBox_AssetButtons;
 	QHBoxLayout* Layout_AssetButtons;

@@ -54,26 +54,41 @@ void byteArraySetInt64(QByteArray* array, qsizetype idx, uint64_t num) {
 	(*array)[idx + 7] = (char)((num >> 56) & 0xFF);
 }
 
-void byteArrayPushStr(QByteArray *array, QString str, qsizetype len) {
-	str.truncate(len);
+void byteArrayPushStr(QByteArray *array, QString str, qsizetype maxLen) {
+	str.truncate(maxLen);
 	array->push_back(str.toStdString().data());
-	for(qsizetype i = str.size(); i < len; ++i) {
+	for(qsizetype i = str.size(); i < maxLen; ++i) {
 		array->push_back(char(0));
 	}
 }
 
-void byteArraySetStr(QByteArray *array, qsizetype idx, QString str, qsizetype len) {
-	str.truncate(len);
+void byteArrayPushStr(QByteArray *array, const char *str, qsizetype strLen, qsizetype maxLen) {
+	for(qsizetype i = 0; i < maxLen; ++i) {
+		if (i < strLen) {
+			array->push_back(str[i]);
+		} else {
+			array->push_back(char(0));
+		}
+	}
+}
+
+void byteArraySetStr(QByteArray *array, qsizetype idx, QString str, qsizetype maxLen) {
+	str.truncate(maxLen);
 	std::string stdStr = str.toStdString();
 
-	array->push_back(str.toStdString().data());
-	for(qsizetype i = str.size(); i < len; ++i) {
-		array->push_back(char(0));
-	}
-
-	for(qsizetype i = 0; i < len; ++i) {
+	for(qsizetype i = 0; i < maxLen; ++i) {
 		if (i < stdStr.size()) {
 			(*array)[idx + i] = stdStr[i];
+		} else {
+			(*array)[idx + i] = char(0);
+		}
+	}
+}
+
+void byteArraySetStr(QByteArray *array, qsizetype idx, const char *str, qsizetype strLen, qsizetype maxLen) {
+	for(qsizetype i = 0; i < maxLen; ++i) {
+		if (i < strLen) {
+			(*array)[idx + i] = str[i];
 		} else {
 			(*array)[idx + i] = char(0);
 		}
@@ -141,8 +156,10 @@ bool ProjectFile::readFile(ProjectFileInfo* info) {
 			if (!elemTop.isNull()) {
 				if (elemTop.tagName() == "compression") {
 					info->m_useCompression = (elemTop.text() == "true");
-				} else if (elemTop.tagName() == "cipher") {
+				} else if (elemTop.tagName() == "cipherMethod") {
 					info->m_cipherMethod = elemTop.text();
+				} else if (elemTop.tagName() == "cipherPassword") {
+					info->m_cipherPassword = elemTop.text();
 				} else if (elemTop.tagName() == "asset") {
 					// Iterate through file tree
 					typedef QPair<AssetTreeNode*, QDomElement> AssetElementPair;
@@ -204,7 +221,8 @@ bool ProjectFile::writeFile(const ProjectFileInfo& info) {
 	QDomElement elemTop = addElement(doc, doc, "mrp");
 	elemTop.setAttribute("version", DEIMOS_VERSION_STR);
 	addElement(doc, elemTop, "compression", info.m_useCompression ? "true" : "false");
-	addElement(doc, elemTop, "cipher", info.m_cipherMethod);
+	addElement(doc, elemTop, "cipherMethod", info.m_cipherMethod);
+	addElement(doc, elemTop, "cipherPassword", info.m_cipherPassword);
 
 	// Iterate through asset tree
 	AssetTreeNode* assetRoot = info.m_assetTree;
@@ -253,12 +271,18 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 		byteArrayPushInt8(&byte, DEIMOS_VERSION_MINOR);
 		byteArrayPushInt8(&byte, DEIMOS_VERSION_PATCH);
 		byteArrayPushInt8(&byte, 0);
+		byteArrayPushInt64(&byte, 0); // Reserved
+
+		// Cipher IV
+		byteArrayPushInt64(&byte, 0);
+		byteArrayPushInt64(&byte, 0);
+		byteArrayPushInt64(&byte, 0);
+		byteArrayPushInt64(&byte, 0);
 
 		// Offsets
-		uint64_t rootFileTableOffset = 32;
-		byteArrayPushInt64(&byte, rootFileTableOffset);
-		byteArrayPushInt64(&byte, 0);
-		byteArrayPushInt64(&byte, 0);
+		uint64_t rootFileTableOffset = 64;
+		byteArrayPushInt64(&byte, rootFileTableOffset); // File table offset
+		byteArrayPushInt64(&byte, 0); // First data block offset
 
 		// ========================================== File table
 		QVector<FileTable> fileTables;
@@ -299,7 +323,7 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 		}
 
 		// Record start of data blocks
-		byteArraySetInt64(&byte, 24, fileTableAccum);
+		byteArraySetInt64(&byte, 56, fileTableAccum);
 
 		// Update offsets for children file tables
 		for(qsizetype i = 0; i < fileTables.size(); ++i) {
@@ -350,6 +374,42 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 		// Write data blocks
 		byte.push_back(byteDataBlocks);
 
+
+		// ========================================== Encrypt contents
+		if (info.m_cipherMethod != cipherMethods[0]) {
+			if (info.m_cipherMethod == cipherMethods[1]) { // AES256
+				// Validate password
+				if (info.m_cipherPassword.isEmpty()) {
+					throw std::exception("Password required for encryption");
+				}
+
+				// Pad out password to 32 characters
+				uint8_t key[32];
+				memset(&key[0], 0, sizeof(key));
+				std::string stdKey = info.m_cipherPassword.toStdString();
+				for(size_t i = 0; i < stdKey.length(); ++i) {
+					key[i] = (uint8_t)stdKey[i];
+				}
+
+				// Generate random IV
+				uint8_t iv[32];
+				for(size_t i = 0; i < sizeof(iv); ++i) {
+					iv[i] = (uint8_t)randChar();
+				}
+				QString ivString((char*)(&iv[0]));
+
+				// Encrypt buffer
+				size_t encryptionOffset = 48;
+				uint8_t* buf = (uint8_t*)byte.data() + encryptionOffset;
+				AES_ctx ctx;
+				AES_init_ctx_iv(&ctx, &key[0], &iv[0]);
+				AES_CBC_encrypt_buffer(&ctx, buf, byte.length() - encryptionOffset);
+				byteArraySetStr(&byte, encryptionOffset - sizeof(iv), ivString, sizeof(iv));
+			} else {
+				std::string message = std::string("Unknown encryption method ") + info.m_cipherMethod.toStdString();
+				throw std::exception(message.data());
+			}
+		}
 	} catch (std::exception& e) {
 		QMessageBox::warning(nullptr, "Error", QString("Error exporting resource file (%0):\n%1").arg(exportFilename).arg(e.what()));
 		return false;
@@ -357,7 +417,7 @@ bool ProjectFile::exportFile(const ProjectFileInfo& info, const QString& exportF
 
 	// Write to file
 	QFile file(exportFilename);
-	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) { return false; }
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) { return false; }
 	file.write(byte);
 	file.close();
 	return true;
@@ -655,14 +715,13 @@ QByteArray DataBlock::toBytes(bool useCompression, QString cipherMethod) {
 				return m_byteArray;
 			}
 			byteFile.clear();
-			byteFile.push_back(bufferCompressed);
+			//byteFile.push_back(bufferCompressed);
+			byteArrayPushStr(&byteFile, bufferCompressed, maxCompressedSize, maxCompressedSize);
 			delete[] bufferCompressed;
 		}
 
-		// Encrypt data
-		if (cipherMethod != "none") {
-			// Encypt raw data
-		}
+		// Pad data to 16-byte boundary
+		while(byteFile.size() % 16 != 0) { byteArrayPushInt8(&byteFile, 0xFF); }
 		
 		// Metadata
 		byteArrayPushInt32(&m_byteArray, crc);
@@ -671,12 +730,10 @@ QByteArray DataBlock::toBytes(bool useCompression, QString cipherMethod) {
 		byteArrayPushInt64(&m_byteArray, compressedSize);
 		byteArrayPushInt64(&m_byteArray, uncompressedSize);
 		byteArrayPushStr(&m_byteArray, info.title, 32);
+		byteArrayPushInt64(&m_byteArray, 0);	// Reserved
 
 		// Contents
 		m_byteArray.push_back(byteFile);
-
-		// Padding
-		while(m_byteArray.size() % 16 != 0) { byteArrayPushInt8(&m_byteArray, 0xFF); }
 	}
 	return m_byteArray;
 }

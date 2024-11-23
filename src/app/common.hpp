@@ -60,8 +60,15 @@
 // External libraries
 #define LZ4_HEAPMODE 1
 #include "lz4.h"
+#define CBC 1
+#define ECB 0
+#define CTR 0
+#include "aes.h"
 
 // ============================================== Helper functions
+
+/// @brief Generate a random printable character.
+char randChar();
 
 /// @brief Round the number up to the next multiple.
 uint64_t roundUp(uint64_t num, uint64_t multiple);
@@ -128,5 +135,6 @@ struct ProjectFileInfo {
 	QString m_filename = "";
 	AssetTreeNode* m_assetTree = nullptr;
 	QString m_cipherMethod = "";
+	QString m_cipherPassword = "";
 	bool m_useCompression = false;
 };

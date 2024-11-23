@@ -61,6 +61,10 @@ ProjectTabPage::ProjectTabPage(QWidget* parent, const QString& filename, Project
 	ComboBox_CipherMethod->setEditable(false);
 	ComboBox_CipherMethod->addItems(cipherMethods);
 	Layout_ProjectOptions->addRow("Encryption Method", ComboBox_CipherMethod);
+	LineEdit_CipherPassword = new QLineEdit();
+	LineEdit_CipherPassword->setEnabled(false);
+	LineEdit_CipherPassword->setMaxLength(32);
+	Layout_ProjectOptions->addRow("Password", LineEdit_CipherPassword);
 	connect(CheckBox_UseCompression, &QCheckBox::checkStateChanged, this, &ProjectTabPage::onCheckStateChanged_CheckBox_UseCompression);
 	connect(ComboBox_CipherMethod, &QComboBox::currentIndexChanged, this, &ProjectTabPage::onCurrentIndexChanged_ComboBox_CipherMethod);
 
@@ -136,6 +140,7 @@ void ProjectTabPage::openFile(const ProjectFileInfo &projectFileInfo) {
 	setProjectFilename(projectFileInfo.m_filename);
 	CheckBox_UseCompression->setChecked(projectFileInfo.m_useCompression);
 	ComboBox_CipherMethod->setCurrentText(projectFileInfo.m_cipherMethod);
+	LineEdit_CipherPassword->setText(projectFileInfo.m_cipherPassword);
 
 	// Add top level items to the list
 	typedef QPair<AssetTreeNode*, QTreeWidgetItem*> AssetItemPair;
@@ -183,6 +188,7 @@ void ProjectTabPage::saveFile(ProjectFileInfo* projectFileInfo) {
 	projectFileInfo->m_filename = projectFilename();
 	projectFileInfo->m_cipherMethod = ComboBox_CipherMethod->currentText();
 	projectFileInfo->m_useCompression = CheckBox_UseCompression->isChecked();
+	projectFileInfo->m_cipherPassword = LineEdit_CipherPassword->text();
 	if (projectFileInfo->m_assetTree) { delete projectFileInfo->m_assetTree; }
 	projectFileInfo->m_assetTree = new AssetTreeNode();
 
@@ -257,6 +263,7 @@ void ProjectTabPage::onCheckStateChanged_CheckBox_UseCompression(int state) {
 
 void ProjectTabPage::onCurrentIndexChanged_ComboBox_CipherMethod(int index) {
 	setDirty(true);
+	LineEdit_CipherPassword->setEnabled(index != 0);
 }
 
 void ProjectTabPage::onFinished_AssetDialog(int status) {

@@ -16,8 +16,10 @@ void byteArraySetInt16(QByteArray* array, qsizetype idx, uint16_t num);
 void byteArraySetInt32(QByteArray* array, qsizetype idx, uint32_t num);
 void byteArraySetInt64(QByteArray* array, qsizetype idx, uint64_t num);
 
-void byteArrayPushStr(QByteArray* array, QString str, qsizetype len);
-void byteArraySetStr(QByteArray* array, qsizetype idx, QString str, qsizetype len);
+void byteArrayPushStr(QByteArray* array, QString str, qsizetype maxLen);
+void byteArrayPushStr(QByteArray* array, const char* str, qsizetype strLen, qsizetype maxLen);
+void byteArraySetStr(QByteArray* array, qsizetype idx, QString str, qsizetype maxLen);
+void byteArraySetStr(QByteArray* array, qsizetype idx, const char* str, qsizetype strLen, qsizetype maxLen);
 
 /// @brief Class representing a file table in an MRC file.
 class FileTable {

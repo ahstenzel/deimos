@@ -51,6 +51,7 @@ target_link_libraries(deimos PRIVATE
 	Qt6::Gui
 	Qt6::Xml
 	liblz4
+	libaes
 )
 
 # Set executable properties

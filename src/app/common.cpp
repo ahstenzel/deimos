@@ -1,5 +1,9 @@
 #include "common.hpp"
 
+char randChar() {
+	return (char)(32 + (rand() % 95));
+}
+
 uint64_t roundUp(uint64_t num, uint64_t multiple) {
 	if (multiple == 0) { return num; }
 	uint64_t r = num % multiple;
@@ -74,7 +78,8 @@ const QList<QPair<QString, AssetTypeDescriptor>> assetTypes = {
 };
 
 const QStringList cipherMethods = {
-	"none"
+	"none",
+	"AES256"
 };
 
 AssetTreeNode::AssetTreeNode() {}
