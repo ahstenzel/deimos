@@ -67,6 +67,13 @@
 
 // ============================================== Helper functions
 
+/// @brief Check if the two version strings match. If 'exact' is false, only match the major & minior revisions.
+/// @param v1 Version string 1
+/// @param v2 Version string 2
+/// @param exact Require patch revision to match as well
+/// @return True if correct revisions match
+bool versionStringMatch(QString v1, QString v2, bool exact = false);
+
 /// @brief Generate a random printable character.
 char randChar();
 

@@ -1,5 +1,15 @@
 #include "common.hpp"
 
+bool versionStringMatch(QString v1, QString v2, bool exact) {
+	QStringList rev1 = v1.split(".");
+	QStringList rev2 = v2.split(".");
+	if (rev1.length() < 3 || rev2.length() < 3) return false;
+	if (rev1[0] != rev2[0]) return false;
+	if (rev1[1] != rev1[1]) return false;
+	if (exact && rev1[2] != rev2[2]) return false;
+	return true;
+}
+
 char randChar() {
 	return (char)(32 + (rand() % 95));
 }
@@ -65,13 +75,17 @@ const uint32_t crc32Lookup[256] = {
 const QList<QPair<QString, AssetTypeDescriptor>> assetTypes = {
 	{"Image", {
 		"MIMG",
-		{"png", "bmp", "tiff"}
+		{"png", "bmp", "tiff", "svg"}
+	}},
+	{"Audio", {
+		"MAUD",
+		{"mp3", "mp4", "wav", "ogg"}
 	}},
 	{"Text", {
 		"MTXT",
 		{"txt", "json", "ini", "xml", "hlsl"}
 	}},
-	{"Binary", {
+	{"Raw", {
 		"MBIN",
 		{"bin", "spv"}
 	}},

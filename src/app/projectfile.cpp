@@ -142,7 +142,7 @@ bool ProjectFile::readFile(ProjectFileInfo* info) {
 
 		// Verify contents
 		QDomElement root = doc.documentElement();
-		if (root.attribute("version") != DEIMOS_VERSION_STR) {
+		if (!versionStringMatch(root.attribute("version"), DEIMOS_VERSION_STR)) {
 			throw std::exception("Version does not match");
 		}
 		if (root.tagName() != "mrp" || doc.doctype().name() != "mrp") {
@@ -699,11 +699,6 @@ QByteArray DataBlock::toBytes(bool useCompression, QString cipherMethod) {
 		uint64_t compressedSize = uncompressedSize;
 		uint32_t crc = crc32Calculate(byteFile.data(), byteFile.size());
 
-		// Parse data
-		if (typeCode == "MIMG") {
-			// Decode image data into bitmap
-		}
-
 		// Compress data
 		if (useCompression) {
 			int maxCompressedSize = LZ4_compressBound(byteFile.size());
@@ -715,7 +710,6 @@ QByteArray DataBlock::toBytes(bool useCompression, QString cipherMethod) {
 				return m_byteArray;
 			}
 			byteFile.clear();
-			//byteFile.push_back(bufferCompressed);
 			byteArrayPushStr(&byteFile, bufferCompressed, maxCompressedSize, maxCompressedSize);
 			delete[] bufferCompressed;
 		}
