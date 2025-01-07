@@ -600,11 +600,11 @@ FileTable::FileHashType FileTable::hash(char *name, size_t len) {
 	return hash;
 }
 
-inline uint8_t FileTable::h1(uint8_t h) {
+inline FileTable::FileHashType FileTable::h1(FileTable::FileHashType h) {
 	return h >> 7;
 }
 
-inline uint8_t FileTable::h2(uint8_t h) {
+inline FileTable::FileHashType FileTable::h2(FileTable::FileHashType h) {
 	return h & 0x7F;
 }
 

@@ -31,7 +31,5 @@
         Name					(32 bytes)
         Reserved                (8 bytes)
     [Data] 					(x bytes)
-        Property Count			(4 bytes)
-        Properties				(4*i bytes)
         Data					(x bytes)
 ...	

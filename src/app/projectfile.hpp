@@ -49,8 +49,8 @@ public:
 private:
 	void resize(size_t newCapacity);
 	static FileHashType hash(char* name, size_t len);
-	static inline uint8_t h1(uint8_t h);
-	static inline uint8_t h2(uint8_t h);
+	static inline FileHashType h1(FileHashType h);
+	static inline FileHashType h2(FileHashType h);
 	static inline bool ctrlIsEmpty(uint8_t h);
 
 	/// @brief Struct representing a single file in a file table.
